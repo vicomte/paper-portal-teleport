@@ -6,6 +6,7 @@ A Minecraft Spigot/Paper plugin that adds craftable paired teleport blocks. Plac
 
 - **Paired Teleport Blocks** - Craft blocks in pairs that link to each other
 - **Visual Identification** - Floating holograms show pair ID, block label (α/β), and connection status
+- **Custom Naming** - Attach a sign to name each teleport block (e.g., "Home", "Mine")
 - **Colored Particles** - Each pair has unique colored particles based on its ID
 - **Item Protection** - If a teleport block item is destroyed (lava, fire, despawn), its placed pair is also destroyed with a server-wide announcement
 - **Explosion Safe** - Blocks drop as items when destroyed by explosions
@@ -48,6 +49,23 @@ Each placed teleport block displays a floating hologram:
 - **Pair ID** - Unique identifier (e.g., `TP-f6e542e9`)
 - **Label** - `α` for first placed, `β` for second placed
 - **Status** - Green `●` = paired and ready, Red `○` = waiting for pair
+
+### Custom Naming with Signs
+
+You can give each teleport block a custom name by attaching a sign:
+
+1. Hold any sign type in your hand (**Important:** Don't be holding a sign while running from a creeper when you want to teleport!)
+2. Right-click directly on the teleport block to place the sign
+3. Write your desired name on the sign (all lines are combined)
+4. The hologram will update to show your custom name instead of the pair ID
+
+Supported sign types:
+- Wall signs (attached to the side)
+- Standing signs (on top)
+- Hanging signs (below the block)
+- Wall hanging signs (attached to the side)
+
+Each block in a pair can have its own name - for example, name one "Home" and the other "Mine". Remove the sign to revert to the default pair ID display.
 
 ## Configuration
 
