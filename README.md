@@ -34,7 +34,7 @@ Craft two teleport blocks at once using:
 
 - Minecraft 1.20.4+
 - Spigot or Paper server
-- Java 17+
+- Java 21+
 
 ## Usage
 
@@ -94,6 +94,15 @@ show-destination-coords: false
 | `portalteleport.admin` | Admin commands | OP |
 
 ## Building from Source
+
+### Build Requirements
+
+| Requirement | Version |
+|-------------|---------|
+| Java | 21+ |
+| Maven | 3.x |
+
+### Build Command
 
 ```bash
 git clone https://github.com/yourusername/portal-teleport.git
