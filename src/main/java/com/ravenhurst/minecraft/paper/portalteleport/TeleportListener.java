@@ -16,7 +16,11 @@ import org.bukkit.event.entity.ItemDespawnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
+import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.type.WallSign;
+import org.bukkit.block.data.type.WallHangingSign;
 import org.bukkit.entity.Item;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -120,6 +124,12 @@ public class TeleportListener implements Listener {
 
         if (teleportBlock == null) {
             return;
+        }
+
+        // Allow sign placement - don't teleport if player is holding a sign
+        ItemStack itemInHand = player.getInventory().getItemInMainHand();
+        if (itemInHand != null && itemInHand.getType().name().contains("SIGN")) {
+            return; // Let the sign be placed
         }
 
         event.setCancelled(true);
@@ -318,6 +328,135 @@ public class TeleportListener implements Listener {
                 return;
             }
         }
+    }
+
+    @EventHandler
+    public void onSignChange(SignChangeEvent event) {
+        // Check if the sign is attached to a teleport block
+        Block signBlock = event.getBlock();
+        plugin.getLogger().info("SignChangeEvent fired for sign at " +
+            signBlock.getLocation().getBlockX() + "," +
+            signBlock.getLocation().getBlockY() + "," +
+            signBlock.getLocation().getBlockZ() +
+            " type=" + signBlock.getType().name());
+
+        // Log the lines being set
+        for (int i = 0; i < 4; i++) {
+            plugin.getLogger().info("  Line " + i + ": " + event.getLine(i));
+        }
+
+        TeleportBlock teleportBlock = findAttachedTeleportBlock(signBlock);
+        plugin.getLogger().info("findAttachedTeleportBlock result: " + (teleportBlock != null ? "FOUND" : "null"));
+
+        if (teleportBlock != null) {
+            // Schedule hologram update with longer delay to ensure sign text is saved
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                plugin.getLogger().info("Updating hologram after sign change...");
+                boolean isFirst = manager.isFirstBlock(teleportBlock);
+                plugin.getVisuals().updateHologram(teleportBlock, isFirst);
+
+                // Notify player
+                Player player = event.getPlayer();
+                player.sendMessage(ChatColor.GREEN + "Teleport block name updated!");
+            }, 5L);
+        }
+    }
+
+    @EventHandler
+    public void onSignBreak(BlockBreakEvent event) {
+        Block brokenBlock = event.getBlock();
+        Material type = brokenBlock.getType();
+
+        // Check if a sign is being broken
+        if (!type.name().contains("SIGN")) {
+            return;
+        }
+
+        // Check if the sign was attached to a teleport block
+        TeleportBlock teleportBlock = findAttachedTeleportBlock(brokenBlock);
+
+        if (teleportBlock != null) {
+            // Schedule hologram update for next tick (after sign is removed)
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                boolean isFirst = manager.isFirstBlock(teleportBlock);
+                plugin.getVisuals().updateHologram(teleportBlock, isFirst);
+            }, 1L);
+        }
+    }
+
+    private TeleportBlock findAttachedTeleportBlock(Block signBlock) {
+        Material type = signBlock.getType();
+        String typeName = type.name();
+
+        plugin.getLogger().info("findAttachedTeleportBlock: signBlock=" + typeName +
+            " at " + signBlock.getLocation().getBlockX() + "," +
+            signBlock.getLocation().getBlockY() + "," +
+            signBlock.getLocation().getBlockZ());
+
+        // Check if it's a wall sign (not hanging)
+        if (typeName.contains("WALL_SIGN") && !typeName.contains("HANGING")) {
+            if (signBlock.getBlockData() instanceof WallSign) {
+                WallSign wallSign = (WallSign) signBlock.getBlockData();
+                Block attachedTo = signBlock.getRelative(wallSign.getFacing().getOppositeFace());
+                plugin.getLogger().info("  Wall sign facing " + wallSign.getFacing() +
+                    ", attached to " + attachedTo.getType() + " at " +
+                    attachedTo.getLocation().getBlockX() + "," +
+                    attachedTo.getLocation().getBlockY() + "," +
+                    attachedTo.getLocation().getBlockZ());
+                return manager.getTeleportBlock(attachedTo.getLocation());
+            }
+        }
+
+        // Check if it's a wall hanging sign
+        if (typeName.contains("WALL_HANGING_SIGN")) {
+            if (signBlock.getBlockData() instanceof WallHangingSign) {
+                WallHangingSign hangingSign = (WallHangingSign) signBlock.getBlockData();
+                // Wall hanging signs attach to blocks on either side (perpendicular to facing)
+                // If facing EAST/WEST, attached to NORTH or SOUTH
+                // If facing NORTH/SOUTH, attached to EAST or WEST
+                BlockFace facing = hangingSign.getFacing();
+                BlockFace side1, side2;
+                if (facing == BlockFace.EAST || facing == BlockFace.WEST) {
+                    side1 = BlockFace.NORTH;
+                    side2 = BlockFace.SOUTH;
+                } else {
+                    side1 = BlockFace.EAST;
+                    side2 = BlockFace.WEST;
+                }
+
+                Block block1 = signBlock.getRelative(side1);
+                Block block2 = signBlock.getRelative(side2);
+                plugin.getLogger().info("  Wall hanging sign facing " + facing +
+                    ", checking " + side1 + ": " + block1.getType() + " at " +
+                    block1.getLocation().getBlockX() + "," +
+                    block1.getLocation().getBlockY() + "," +
+                    block1.getLocation().getBlockZ());
+                plugin.getLogger().info("  Also checking " + side2 + ": " + block2.getType() + " at " +
+                    block2.getLocation().getBlockX() + "," +
+                    block2.getLocation().getBlockY() + "," +
+                    block2.getLocation().getBlockZ());
+
+                TeleportBlock result = manager.getTeleportBlock(block1.getLocation());
+                if (result != null) return result;
+                return manager.getTeleportBlock(block2.getLocation());
+            }
+        }
+
+        // Check if it's a standing sign (on top of a block)
+        if (typeName.contains("SIGN") && !typeName.contains("WALL") && !typeName.contains("HANGING")) {
+            Block below = signBlock.getRelative(BlockFace.DOWN);
+            plugin.getLogger().info("  Standing sign, checking block below: " + below.getType());
+            return manager.getTeleportBlock(below.getLocation());
+        }
+
+        // Check if it's a hanging sign (hanging below a block)
+        if (typeName.contains("HANGING_SIGN") && !typeName.contains("WALL")) {
+            Block above = signBlock.getRelative(BlockFace.UP);
+            plugin.getLogger().info("  Hanging sign, checking block above: " + above.getType());
+            return manager.getTeleportBlock(above.getLocation());
+        }
+
+        return null;
     }
 
     @EventHandler

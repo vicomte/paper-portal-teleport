@@ -1,0 +1,45 @@
+name: Version Check
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from PR branch
+        id: pr_version
+        run: |
+          PR_VERSION=$(grep -oP '<version>\K[^<]+' pom.xml | head -1)
+          echo "version=$PR_VERSION" >> $GITHUB_OUTPUT
+          echo "PR version: $PR_VERSION"
+
+      - name: Get version from base branch
+        id: base_version
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          BASE_VERSION=$(git show origin/${{ github.base_ref }}:pom.xml | grep -oP '<version>\K[^<]+' | head -1)
+          echo "version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "Base version: $BASE_VERSION"
+
+      - name: Compare versions
+        run: |
+          PR_VERSION="${{ steps.pr_version.outputs.version }}"
+          BASE_VERSION="${{ steps.base_version.outputs.version }}"
+
+          echo "Base branch version: $BASE_VERSION"
+          echo "PR branch version: $PR_VERSION"
+
+          if [ "$PR_VERSION" == "$BASE_VERSION" ]; then
+            echo "::error::Version was not updated! Please increment the version in pom.xml"
+            echo "Current version: $BASE_VERSION"
+            exit 1
+          fi
+
+          echo "Version updated from $BASE_VERSION to $PR_VERSION"

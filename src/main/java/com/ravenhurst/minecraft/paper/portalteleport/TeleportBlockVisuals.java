@@ -3,8 +3,13 @@ package com.ravenhurst.minecraft.paper.portalteleport;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.Sign;
+import org.bukkit.block.data.type.WallSign;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -66,17 +71,46 @@ public class TeleportBlockVisuals {
         if (hologram != null && !hologram.isDead()) {
             updateHologramText(hologram, block, isFirstBlock);
         } else {
+            // Remove from map if it was dead
+            if (hologram != null) {
+                holograms.remove(loc);
+            }
+            // Also clean up any orphaned armor stands at this location
+            cleanupHologramsAtLocation(loc);
             createHologram(block, isFirstBlock);
         }
     }
 
+    private void cleanupHologramsAtLocation(Location loc) {
+        Location checkLoc = loc.clone().add(0.5, 1.5, 0.5);
+        for (Entity entity : loc.getWorld().getNearbyEntities(checkLoc, 0.5, 0.5, 0.5)) {
+            if (entity instanceof ArmorStand) {
+                ArmorStand stand = (ArmorStand) entity;
+                // Remove any invisible marker armor stands (our holograms)
+                if (!stand.isVisible() && stand.isMarker()) {
+                    stand.remove();
+                }
+            }
+        }
+    }
+
     private void updateHologramText(ArmorStand hologram, TeleportBlock block, boolean isFirstBlock) {
-        String pairIdShort = block.getPairId().toString().substring(0, 8);
         ChatColor pairColor = getPairColor(block.getPairId());
         String label = isFirstBlock ? "α" : "β";
         String status = block.isPaired() ? ChatColor.GREEN + "●" : ChatColor.RED + "○";
 
-        String displayName = pairColor + "TP-" + pairIdShort + " " + ChatColor.WHITE + label + " " + status;
+        // Check for attached sign with custom name
+        String signName = getAttachedSignText(block.getLocation());
+        String displayName;
+
+        if (signName != null && !signName.isEmpty()) {
+            // Use custom name from sign
+            displayName = pairColor + signName + " " + ChatColor.WHITE + label + " " + status;
+        } else {
+            // Use UUID-based name
+            String pairIdShort = block.getPairId().toString().substring(0, 8);
+            displayName = pairColor + "TP-" + pairIdShort + " " + ChatColor.WHITE + label + " " + status;
+        }
 
         // Add destination coordinates if enabled and paired
         if (plugin.showDestinationCoords() && block.isPaired()) {
@@ -87,6 +121,90 @@ public class TeleportBlockVisuals {
         }
 
         hologram.setCustomName(displayName);
+    }
+
+    private String getAttachedSignText(Location blockLoc) {
+        Block block = blockLoc.getBlock();
+
+        // Check all faces for attached signs
+        BlockFace[] faces = { BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.UP };
+
+        for (BlockFace face : faces) {
+            Block adjacent = block.getRelative(face);
+            Material type = adjacent.getType();
+            String typeName = type.name();
+
+            // Check for wall signs attached to this block
+            if (typeName.contains("WALL_SIGN") && !typeName.contains("HANGING")) {
+                if (adjacent.getBlockData() instanceof WallSign) {
+                    WallSign wallSign = (WallSign) adjacent.getBlockData();
+                    // Check if the sign is facing away from our block (meaning it's attached to us)
+                    if (wallSign.getFacing().getOppositeFace() == face) {
+                        return readSignText(adjacent);
+                    }
+                }
+            }
+
+            // Check for wall hanging signs attached to this block
+            // Wall hanging signs attach perpendicular to their facing direction
+            if (typeName.contains("WALL_HANGING_SIGN")) {
+                if (adjacent.getBlockData() instanceof org.bukkit.block.data.type.WallHangingSign) {
+                    org.bukkit.block.data.type.WallHangingSign hangingSign =
+                        (org.bukkit.block.data.type.WallHangingSign) adjacent.getBlockData();
+                    BlockFace signFacing = hangingSign.getFacing();
+                    // If sign faces EAST/WEST, it's attached to blocks on NORTH/SOUTH sides
+                    // If sign faces NORTH/SOUTH, it's attached to blocks on EAST/WEST sides
+                    boolean isAttached = false;
+                    if ((signFacing == BlockFace.EAST || signFacing == BlockFace.WEST) &&
+                        (face == BlockFace.NORTH || face == BlockFace.SOUTH)) {
+                        isAttached = true;
+                    } else if ((signFacing == BlockFace.NORTH || signFacing == BlockFace.SOUTH) &&
+                               (face == BlockFace.EAST || face == BlockFace.WEST)) {
+                        isAttached = true;
+                    }
+                    if (isAttached) {
+                        return readSignText(adjacent);
+                    }
+                }
+            }
+
+            // Check for standing sign or hanging sign on top
+            if (face == BlockFace.UP && typeName.contains("SIGN") &&
+                !typeName.contains("WALL") && !typeName.contains("HANGING")) {
+                return readSignText(adjacent);
+            }
+
+            // Check for hanging sign below (attached to bottom of block)
+            if (face == BlockFace.UP) {
+                Block below = block.getRelative(BlockFace.DOWN);
+                String belowType = below.getType().name();
+                if (belowType.contains("HANGING_SIGN") && !belowType.contains("WALL")) {
+                    return readSignText(below);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private String readSignText(Block signBlock) {
+        if (signBlock.getState() instanceof Sign) {
+            Sign sign = (Sign) signBlock.getState();
+            StringBuilder text = new StringBuilder();
+
+            for (String line : sign.getLines()) {
+                String stripped = ChatColor.stripColor(line).trim();
+                if (!stripped.isEmpty()) {
+                    if (text.length() > 0) {
+                        text.append(" ");
+                    }
+                    text.append(stripped);
+                }
+            }
+
+            return text.toString();
+        }
+        return null;
     }
 
     public void removeHologram(Location loc) {

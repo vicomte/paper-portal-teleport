@@ -11,12 +11,14 @@ public class TeleportBlock {
     private final UUID pairId;
     private Location pairedLocation;
     private final long createdAt;
+    private String customName;
 
     public TeleportBlock(Location location, UUID pairId) {
         this.location = location;
         this.pairId = pairId;
         this.createdAt = System.currentTimeMillis();
         this.pairedLocation = null;
+        this.customName = null;
     }
 
     public Location getLocation() {
@@ -56,6 +58,18 @@ public class TeleportBlock {
 
     public long getCreatedAt() {
         return createdAt;
+    }
+
+    public String getCustomName() {
+        return customName;
+    }
+
+    public void setCustomName(String customName) {
+        this.customName = customName;
+    }
+
+    public boolean hasCustomName() {
+        return customName != null && !customName.isEmpty();
     }
 
     @Override
