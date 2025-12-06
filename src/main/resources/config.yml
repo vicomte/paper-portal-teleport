@@ -1,0 +1,5 @@
+# PortalTeleport Configuration
+
+# Show destination coordinates in the hologram above paired teleport blocks
+# When enabled, shows coordinates like "-> X, Y, Z" below the pair ID
+show-destination-coords: false

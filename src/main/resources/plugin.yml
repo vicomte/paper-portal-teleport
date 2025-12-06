@@ -1,0 +1,23 @@
+name: PortalTeleport
+main: com.ravenhurst.minecraft.paper.portalteleport.PortalTeleportPlugin
+version: 1.0.0
+api-version: 1.20
+description: Craftable paired teleport blocks with visual indicators and item protection
+author: Xerciz
+
+commands:
+  portalteleport:
+    description: Portal teleport management commands
+    usage: /<command> [args]
+    permission: portalteleport.admin
+
+permissions:
+  portalteleport.use:
+    description: Allows using teleport blocks
+    default: true
+  portalteleport.create:
+    description: Allows creating teleport blocks
+    default: true
+  portalteleport.admin:
+    description: Admin commands
+    default: op
